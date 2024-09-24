@@ -33,8 +33,10 @@ Host = namedtuple('Host', 'hostname ip_address mac_address')
 
 TIMEOUT = 1
 RENEW_RATE = 5
-FILTER_BY_MAC = False
+SCAN_TIMER = 2.0
+FILTER_BY_MAC = True
 MAC_ADDRESS = ('b8:27:eb', )  # OUI for Raspberry Pi Foundation
+
 current_interface = 'enp0s31f6'
 current_network = '192.168.10.0/24'
 list_of_already_show_hosts = []
@@ -86,9 +88,8 @@ def scan_neighbors(net, interface):
             logger.error('{}. No such device found.'.format(e.strerror))
         else:
             raise
-    #list_of_hosts.sort(key=attrgetter('ip_address'))
+    # define parts of ip address as integer in a tuple to let Python sort them correctly
     list_of_hosts.sort(key=lambda x: tuple(int(part) for part in x.ip_address.split('.')))
-    #list_of_hosts = ['.'.join(h) for h in sorted_list]
     return list_of_hosts
 
 
@@ -119,7 +120,7 @@ def find_all_pies():
     return result
 
 
-def exit_on_q(key):
+def on_unhandled_input(key):
     if key in ('q', 'Q'):
         raise urwid.ExitMainLoop()
 
@@ -142,6 +143,9 @@ def on_timer(widget, user_data):
     infos = ['']
     list_of_hosts = find_all_pies()
     for h in list_of_hosts:
+        if isinstance(h, list):
+            logger.warn('Found list were a Host instance should be: ' + str(h))
+            continue
         # host has been found at last search
         times_host_has_been_found[h] += 1
         if h not in list_of_already_show_hosts:
@@ -149,6 +153,9 @@ def on_timer(widget, user_data):
             list_of_already_show_hosts.append(h)
     for h in list_of_already_show_hosts:
         if h in list_of_hosts:
+            if isinstance(h, list):
+                logger.warn('Found list were a Host instance should be: ' + str(h))
+                continue
             # host has been found at last search
             attr = 'highlight' if times_host_has_been_found[h] < RENEW_RATE else ''
             infos.append((attr, h.ip_address + ' '*(18-len(h.ip_address)) + h.mac_address + '    ' + h.hostname + '\n'))
@@ -157,7 +164,7 @@ def on_timer(widget, user_data):
             times_host_has_been_found[h] = 0
             infos.append(('', '    \n'))
     result_text.set_text(infos)
-    loop.set_alarm_in(2.0, on_timer)
+    loop.set_alarm_in(SCAN_TIMER, on_timer)
 
 
 def main_gui():
@@ -185,8 +192,8 @@ def main_gui():
     urwid.connect_signal(interface_edit, 'change', on_interface_change)
     urwid.connect_signal(button, 'click', on_exit_clicked)
     # start main loop
-    loop = urwid.MainLoop(top, palette, unhandled_input=exit_on_q)
-    loop.set_alarm_in(2.0, on_timer)
+    loop = urwid.MainLoop(top, palette, unhandled_input=on_unhandled_input)
+    loop.set_alarm_in(SCAN_TIMER, on_timer)
     loop.run()
 
 
