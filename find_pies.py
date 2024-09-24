@@ -37,7 +37,7 @@ TIMEOUT = 1
 RENEW_RATE = 5
 SCAN_TIMER = 4.0
 FILTER_BY_MAC = True
-MAC_ADDRESS = ('b8:27:eb', )  # OUI for Raspberry Pi Foundation
+MAC_ADDRESS = ('b8:27:eb', 'dc:a6:32') # OUIs for Raspberry Pi Foundation
 
 # initialize global variables (sic!)
 current_network = '192.168.1.0/24'
