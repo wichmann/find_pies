@@ -25,23 +25,32 @@ from collections import defaultdict
 import urwid
 
 
-logging.basicConfig(format='%(asctime)s %(levelname)-5s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.ERROR)
+# initialize logging only to log file
+FORMAT = '%(asctime)s %(levelname)-5s %(message)s'
 logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler('find_pies.log')
+formatter = logging.Formatter(FORMAT)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler) 
+logger.setLevel(logging.DEBUG)
 
-
+# create class to handle Hosts found on the local network
 Host = namedtuple('Host', 'hostname ip_address mac_address')
 
+# set constants for scanning
 TIMEOUT = 1
 RENEW_RATE = 5
 SCAN_TIMER = 2.0
 FILTER_BY_MAC = True
 MAC_ADDRESS = ('b8:27:eb', )  # OUI for Raspberry Pi Foundation
 
+# initialize global variables (sic!)
 current_interface = 'enp0s31f6'
 current_network = '192.168.10.0/24'
 list_of_already_show_hosts = []
 times_host_has_been_found = defaultdict(int)
 
+# set color palette for different parts of the GUI
 palette = [
     ('banner', 'black', 'light gray'),
     ('streak', 'black', 'dark red'),
@@ -97,12 +106,13 @@ def scan_all_interfaces():
     for network, netmask, _, interface, address in scapy.config.conf.route.routes:
         # skip loopback network and default gw
         if network == 0 or interface == 'lo' or address == '127.0.0.1' or address == '0.0.0.0':
+            logger.debug('Ignoring local interfaces.')
             continue
         if netmask <= 0 or netmask == 0xFFFFFFFF:
+            logger.debug('Ignoring local interfaces.')
             continue
         net = to_CIDR_notation(network, netmask)
         if interface != scapy.config.conf.iface:
-            # see http://trac.secdev.org/scapy/ticket/537
             logger.warn('Skipping {} because scapy currently doesn\'t support arping on non-primary network interfaces'.format(net))
             continue
         if net:
@@ -177,14 +187,14 @@ def main_gui():
     #result_text.set_text(u'\n' * 100)
     results = urwid.LineBox(result_text, title='Found devices')
     # setting widgets
-    network_address_edit = urwid.Edit(u"Network address: ")
+    network_address_edit = urwid.Edit('Network address: ')
     network_address_edit.set_edit_text(current_network)
-    interface_edit = urwid.Edit(u"Interface name: ")
+    interface_edit = urwid.Edit('Interface name: ')
     interface_edit.set_edit_text(current_interface)
     settings_pile = urwid.Pile([network_address_edit, div, interface_edit])
     settings = urwid.LineBox(settings_pile, title='Settings')
     # other widgets
-    button = urwid.Button(u'Exit')
+    button = urwid.Button('Exit')
     pile = urwid.Pile([banner_text_map, div, settings, div, results, div, button])
     top = urwid.Filler(pile, valign='top')
     # connect events to funtions
