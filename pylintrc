@@ -1,0 +1,8 @@
+[MESSAGES CONTROL]
+disable=logging-fstring-interpolation,global-statement,import-error,unused-argument
+
+[REPORTS]
+output-format=colorized
+
+[FORMAT]
+max-line-length=120
