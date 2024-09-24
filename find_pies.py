@@ -1,28 +1,23 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 #
 # find_pies
 #
 # find_pies searches for all devices inside a connected network filtered by a
 # given MAC address.
 #
-# This tool is based on the Layer 2 network neighbourhood discovery tool by
+# This tool was based on the Layer 2 network neighbourhood discovery tool by
 # Benedikt Waldvogel. (https://github.com/bwaldvogel/neighbourhood)
 #
 
-from __future__ import absolute_import, division, print_function
-
-import math
-import errno
 import socket
 import logging
-import scapy.config
-import scapy.layers.l2
-import scapy.route
-from operator import attrgetter
+from ipaddress import IPv4Network
 from collections import namedtuple
 from collections import defaultdict
 
 import urwid
+from getmac import get_mac_address
+from multiping import multi_ping
 
 
 # initialize logging only to log file
@@ -40,13 +35,12 @@ Host = namedtuple('Host', 'hostname ip_address mac_address')
 # set constants for scanning
 TIMEOUT = 1
 RENEW_RATE = 5
-SCAN_TIMER = 2.0
+SCAN_TIMER = 4.0
 FILTER_BY_MAC = True
 MAC_ADDRESS = ('b8:27:eb', )  # OUI for Raspberry Pi Foundation
 
 # initialize global variables (sic!)
-current_interface = 'enp0s31f6'
-current_network = '192.168.10.0/24'
+current_network = '192.168.1.0/24'
 list_of_already_show_hosts = []
 times_host_has_been_found = defaultdict(int)
 
@@ -58,69 +52,30 @@ palette = [
     ('highlight', 'black', 'yellow'),]
 
 
-def long2net(arg):
-    if (arg <= 0 or arg >= 0xFFFFFFFF):
-        raise ValueError('illegal netmask value', hex(arg))
-    return 32 - int(round(math.log(0xFFFFFFFF - arg, 2)))
-
-
-def to_CIDR_notation(bytes_network, bytes_netmask):
-    network = scapy.utils.ltoa(bytes_network)
-    netmask = long2net(bytes_netmask)
-    net = '{}/{}'.format(network, netmask)
-    if netmask < 16:
-        logger.warn('{} is too big. Skipping.'.format(net))
-        return None
-    return net
-
-
-def scan_neighbors(net, interface):
-    logger.info('Arping {} on {}.'.format(net, interface))
+def scan_neighbors(net):
+    logger.info('Pinging {}.'.format(net))
     list_of_hosts = list()
-    try:
-        ans, unans = scapy.layers.l2.arping(net, iface=interface, timeout=TIMEOUT, verbose=False)
-        for s, r in ans.res:
-            hostname= ''
-            mac_address = r.src
-            ip_address= r.psrc
-            try:
-                hostname = socket.gethostbyaddr(r.psrc)
-            except socket.herror:
-                # failed to resolve
-                pass
-            #logger.info(str(r))
-            list_of_hosts.append(Host(hostname, ip_address, mac_address))
-    except socket.error as e:
-        if e.errno == errno.EPERM:     # Operation not permitted
-            logger.error('{}. Did you run as root?'.format(e.strerror))
-        elif e.errno == 19:
-            logger.error('{}. No such device found.'.format(e.strerror))
-        else:
-            raise
+    addrs = [str(h) for h in IPv4Network(net).hosts()]
+    responses, no_responses = multi_ping(addrs, timeout=TIMEOUT)
+    for ip_address, r_time in responses.items():
+        try:
+            hostname, _, _ = socket.gethostbyaddr(ip_address)
+        except socket.herror:
+            # failed to resolve
+            pass
+        # find MAC address for given IP
+        mac_address = get_mac_address(ip=ip_address)
+        if not mac_address:
+            mac_address = '00:00:00:00:00:00'
+        # append host to list
+        list_of_hosts.append(Host(hostname, ip_address, mac_address))    
     # define parts of ip address as integer in a tuple to let Python sort them correctly
     list_of_hosts.sort(key=lambda x: tuple(int(part) for part in x.ip_address.split('.')))
     return list_of_hosts
 
 
-def scan_all_interfaces():
-    for network, netmask, _, interface, address in scapy.config.conf.route.routes:
-        # skip loopback network and default gw
-        if network == 0 or interface == 'lo' or address == '127.0.0.1' or address == '0.0.0.0':
-            logger.debug('Ignoring local interfaces.')
-            continue
-        if netmask <= 0 or netmask == 0xFFFFFFFF:
-            logger.debug('Ignoring local interfaces.')
-            continue
-        net = to_CIDR_notation(network, netmask)
-        if interface != scapy.config.conf.iface:
-            logger.warn('Skipping {} because scapy currently doesn\'t support arping on non-primary network interfaces'.format(net))
-            continue
-        if net:
-            scan_neighbors(net, interface)
-
-
 def find_all_pies():
-    list_of_hosts = scan_neighbors(current_network, current_interface)
+    list_of_hosts = scan_neighbors(current_network)
     for host in list_of_hosts:
         logger.debug('Found host: {}'.format(host))
     if FILTER_BY_MAC:
@@ -138,11 +93,6 @@ def on_unhandled_input(key):
 def on_network_address_change(edit, new_edit_text):
     logger.debug('Setting new network address: ' + new_edit_text)
     current_network = new_edit_text
-
-
-def on_interface_change(edit, new_edit_text):
-    logger.debug('Setting new interface name: ' + new_edit_text)
-    current_interface = new_edit_text
 
 
 def on_exit_clicked(button):
@@ -189,9 +139,7 @@ def main_gui():
     # setting widgets
     network_address_edit = urwid.Edit('Network address: ')
     network_address_edit.set_edit_text(current_network)
-    interface_edit = urwid.Edit('Interface name: ')
-    interface_edit.set_edit_text(current_interface)
-    settings_pile = urwid.Pile([network_address_edit, div, interface_edit])
+    settings_pile = urwid.Pile([network_address_edit, ])
     settings = urwid.LineBox(settings_pile, title='Settings')
     # other widgets
     button = urwid.Button('Exit')
@@ -199,7 +147,6 @@ def main_gui():
     top = urwid.Filler(pile, valign='top')
     # connect events to funtions
     urwid.connect_signal(network_address_edit, 'change', on_network_address_change)
-    urwid.connect_signal(interface_edit, 'change', on_interface_change)
     urwid.connect_signal(button, 'click', on_exit_clicked)
     # start main loop
     loop = urwid.MainLoop(top, palette, unhandled_input=on_unhandled_input)
