@@ -37,10 +37,10 @@ TIMEOUT = 1
 RENEW_RATE = 5
 SCAN_TIMER = 4.0
 FILTER_BY_MAC = True
-MAC_ADDRESS = ('b8:27:eb', 'dc:a6:32') # OUIs for Raspberry Pi Foundation
+MAC_ADDRESS = ('b8:27:eb', 'dc:a6:32', 'e4:5f:01') # OUIs for Raspberry Pi Foundation
 
 # initialize global variables (sic!)
-current_network = '192.168.1.0/24'
+current_network = '192.168.24.0/24'
 list_of_already_show_hosts = []
 times_host_has_been_found = defaultdict(int)
 
@@ -62,7 +62,7 @@ def scan_neighbors(net):
             hostname, _, _ = socket.gethostbyaddr(ip_address)
         except socket.herror:
             # failed to resolve
-            pass
+            hostname = ''
         # find MAC address for given IP
         mac_address = get_mac_address(ip=ip_address)
         if not mac_address:
