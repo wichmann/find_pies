@@ -18,6 +18,7 @@ import logging
 import scapy.config
 import scapy.layers.l2
 import scapy.route
+from operator import attrgetter
 from collections import namedtuple
 
 import urwid
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 Host = namedtuple('Host', 'hostname ip_address mac_address')
 
 TIMEOUT = 1
-FILTER_BY_MAC = False
+FILTER_BY_MAC = True
 MAC_ADDRESS = 'b8:27:eb'  # OUI for Raspberry Pi Foundation
 current_interface = 'enp0s31f6'
 current_network = '192.168.10.0/24'
@@ -81,6 +82,7 @@ def scan_neighbors(net, interface):
             logger.error('{}. No such device found.'.format(e.strerror))
         else:
             raise
+    list_of_hosts.sort(key=attrgetter('ip_address'))
     return list_of_hosts
 
 
@@ -105,8 +107,7 @@ def find_all_pies():
     for host in list_of_hosts:
         logger.debug('Found host: {}'.format(host))
     if FILTER_BY_MAC:
-        # TODO Handle the impossible  case when some part of the MAC is like the filter string.
-        result = [h for h in list_of_hosts if MAC_ADDRESS in h.mac_address]
+        result = [h for h in list_of_hosts if h.mac_address.startswith(MAC_ADDRESS)]
     else:
         result = list_of_hosts
     return result
@@ -139,7 +140,7 @@ def on_timer(widget, user_data):
             list_of_already_show_hosts.append(h)
     for h in list_of_already_show_hosts:
         if h in list_of_hosts:
-            infos.append('    '.join((h.ip_address, h.mac_address, h.hostname)))
+            infos.append(h.ip_address + ' '*(18-len(h.ip_address)) + h.mac_address + '    ' + h.hostname)
         else:
             infos.append('    ')
     result_text.set_text('\n'.join(infos))

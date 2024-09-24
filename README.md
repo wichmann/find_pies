@@ -7,21 +7,20 @@ This tool is based on the Layer 2 network neighbourhood discovery tool by
 Benedikt Waldvogel. [1]
 
 
+## Usage
+
+find_pies has to be executed with root privileges:
+
+    sudo ./find_pies.py
+
+
 ## Dependencies
 
 * [scapy][2] for networking functions like [arping][3].
 * [urwid][4] for console widgets.
 
 
-## TODO 
-
-* ???
-* ???
-
-
-## Known issues 
-
-
+## Sources
 
 [1]: https://github.com/bwaldvogel/neighbourhood
 [2]: http://www.secdev.org/projects/scapy/
